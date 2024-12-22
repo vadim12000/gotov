@@ -133,4 +133,4 @@ def edit_message(data):
         conn.close()
 
 if __name__ == '__main__':
-    socketio.run(app, host='26.121.197.91', port=5000)
+    socketio.run(app, host='100.20.92.101', port=1000)
