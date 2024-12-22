@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мессенджер</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        /* Основной стиль страницы */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f5;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: #2f3136;
+            color: white;
+            padding: 10px;
+        }
+
+        .profile {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .user-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .chat {
+            flex-grow: 1;
+            background-color: #36393f;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .messages {
+            overflow-y: auto;
+            max-height: 80%;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .message {
+            background-color: #4f545c;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: #b9bbbe;
+        }
+
+        .message-options {
+            position: absolute;
+            right: 5px;
+            top: 5px;
+            color: #b9bbbe;
+            cursor: pointer;
+        }
+
+        .message-options:hover {
+            color: #7289da;
+        }
+
+        .input-box {
+            display: flex;
+        }
+
+        #message-input {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+        }
+
+        button {
+            background-color: #7289da;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #5d6fa5;
+        }
+
+        .logout-button {
+            background-color: #ff4747;
+            margin-top: 20px;
+        }
+
+        .logout-button:hover {
+            background-color: #ff6161;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Левая панель (список пользователей) -->
+        <div class="sidebar">
+            <div class="profile">
+                <span id="profile-name">Загрузка...</span>
+            </div>
+            <div class="user-list">
+                <!-- Список пользователей будет динамически добавляться -->
+            </div>
+            <button class="logout-button" id="logout-button">Выйти</button>
+        </div>
+
+        <!-- Правая панель (чат) -->
+        <div class="chat">
+            <div class="messages" id="messages"></div>
+            <div class="input-box">
+                <input type="text" id="message-input" placeholder="Введите сообщение..." />
+                <button id="send-button">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        let username = localStorage.getItem('username');
+        if (!username) {
+            username = prompt("Введите ваше имя");
+            localStorage.setItem('username', username);
+        }
+
+        document.getElementById("profile-name").textContent = username;
+
+        // Получаем все сообщения
+        socket.emit('get_messages', username);
+
+        // Получаем сообщения с сервера
+        socket.on('all_messages', function(messages) {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '';
+
+            messages.forEach(function(msg) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                messageElement.setAttribute('data-id', msg[0]);
+                messageElement.setAttribute('data-username', msg[1]);
+
+                messageElement.innerHTML = `
+                    <strong>${msg[1]}</strong>: ${msg[2]} <span class="timestamp">${msg[3]}</span>
+                    <div class="message-options">
+                        <span class="three-dots">...</span>
+                    </div>
+                `;
+
+                messagesContainer.appendChild(messageElement);
+            });
+
+            // Прокрутка вниз
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+
+        // Обработка нажатия на три точки
+        document.getElementById('messages').addEventListener('click', function(event) {
+            if (event.target.classList.contains('three-dots')) {
+                const messageElement = event.target.closest('.message');
+                const messageId = messageElement.getAttribute('data-id');
+                const messageOwner = messageElement.getAttribute('data-username');
+
+                if (messageOwner === username) {
+                    const action = prompt("Выберите действие: edit (редактировать) или delete (удалить)");
+
+                    if (action === "edit") {
+                        const newMessage = prompt("Редактировать сообщение:", messageElement.textContent.trim());
+                        if (newMessage) {
+                            socket.emit('edit_message', {
+                                id: messageId,
+                                message: newMessage,
+                                username: username
+                            });
+                        }
+                    } else if (action === "delete") {
+                        if (confirm("Вы уверены, что хотите удалить это сообщение?")) {
+                            socket.emit('delete_message', { id: messageId, username: username });
+                        }
+                    }
+                }
+            }
+        });
+
+        // Обработка отправки сообщения
+        document.getElementById('send-button').addEventListener('click', function() {
+            const message = document.getElementById('message-input').value;
+            if (message) {
+                socket.emit('message', { username: username, message: message });
+                document.getElementById('message-input').value = ''; // Очистить поле ввода
+            }
+        });
+
+        // Обработка удаления сообщения
+        socket.on('message_deleted', function(messageId) {
+            const messageElement = document.querySelector(`.message[data-id="${messageId}"]`);
+            if (messageElement) {
+                messageElement.remove();
+            }
+        });
+
+        // Обработка редактирования сообщения
+        socket.on('message_edited', function(data) {
+            const messageElement = document.querySelector(`.message[data-id="${data.id}"]`);
+            if (messageElement) {
+                messageElement.innerHTML = `
+                    <strong>${data.username}</strong>: ${data.message} <span class="timestamp">${new Date().toLocaleString()}</span>
+                    <div class="message-options">
+                        <span class="three-dots">...</span>
+                    </div>
+                `;
+            }
+        });
+
+        // Обработка кнопки выхода
+        document.getElementById('logout-button').addEventListener('click', function() {
+            localStorage.removeItem('username');
+            window.location.reload();
+        });
+    </script>
+</body>
+</html>
