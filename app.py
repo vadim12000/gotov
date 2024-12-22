@@ -1,5 +1,5 @@
 import sqlite3
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template
 from flask_socketio import SocketIO, send, emit
 import datetime
 import threading
@@ -43,6 +43,10 @@ def index():
 # Обработка сообщений от клиента
 @socketio.on('message')
 def handle_message(data):
+    """
+    При получении сообщения от клиента, сохраняем его в базу данных
+    и отправляем всем подключенным клиентам.
+    """
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
 
@@ -50,10 +54,14 @@ def handle_message(data):
     cursor.execute('INSERT INTO messages (username, message) VALUES (?, ?)', 
                    (data['username'], data['message']))
     conn.commit()
+
+    # Получаем все сообщения
+    cursor.execute('SELECT id, username, message, timestamp FROM messages ORDER BY timestamp')
+    messages = cursor.fetchall()
     conn.close()
 
-    # Отправляем сообщение всем пользователям
-    send(data, broadcast=True)
+    # Отправляем все сообщения всем подключённым клиентам
+    emit('all_messages', messages, broadcast=True)
 
 # Получение всех сообщений для пользователя
 @socketio.on('get_messages')
@@ -64,12 +72,6 @@ def get_messages(username):
     # Получаем все сообщения
     cursor.execute('SELECT id, username, message, timestamp FROM messages ORDER BY timestamp')
     messages = cursor.fetchall()
-
-    # Обновляем время последнего подключения пользователя
-    cursor.execute('UPDATE users SET last_seen = ? WHERE username = ?', 
-                   (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), username))
-    conn.commit()
-    conn.close()
 
     # Отправляем все сообщения пользователю
     emit('all_messages', messages)
