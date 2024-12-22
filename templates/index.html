@@ -147,7 +147,7 @@
 
         document.getElementById("profile-name").textContent = username;
 
-        // Получаем все сообщения
+        // Получаем все сообщения при подключении
         socket.emit('get_messages', username);
 
         // Получаем сообщения с сервера
@@ -175,61 +175,12 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         });
 
-        // Обработка нажатия на три точки
-        document.getElementById('messages').addEventListener('click', function(event) {
-            if (event.target.classList.contains('three-dots')) {
-                const messageElement = event.target.closest('.message');
-                const messageId = messageElement.getAttribute('data-id');
-                const messageOwner = messageElement.getAttribute('data-username');
-
-                if (messageOwner === username) {
-                    const action = prompt("Выберите действие: edit (редактировать) или delete (удалить)");
-
-                    if (action === "edit") {
-                        const newMessage = prompt("Редактировать сообщение:", messageElement.textContent.trim());
-                        if (newMessage) {
-                            socket.emit('edit_message', {
-                                id: messageId,
-                                message: newMessage,
-                                username: username
-                            });
-                        }
-                    } else if (action === "delete") {
-                        if (confirm("Вы уверены, что хотите удалить это сообщение?")) {
-                            socket.emit('delete_message', { id: messageId, username: username });
-                        }
-                    }
-                }
-            }
-        });
-
         // Обработка отправки сообщения
         document.getElementById('send-button').addEventListener('click', function() {
             const message = document.getElementById('message-input').value;
             if (message) {
                 socket.emit('message', { username: username, message: message });
                 document.getElementById('message-input').value = ''; // Очистить поле ввода
-            }
-        });
-
-        // Обработка удаления сообщения
-        socket.on('message_deleted', function(messageId) {
-            const messageElement = document.querySelector(`.message[data-id="${messageId}"]`);
-            if (messageElement) {
-                messageElement.remove();
-            }
-        });
-
-        // Обработка редактирования сообщения
-        socket.on('message_edited', function(data) {
-            const messageElement = document.querySelector(`.message[data-id="${data.id}"]`);
-            if (messageElement) {
-                messageElement.innerHTML = `
-                    <strong>${data.username}</strong>: ${data.message} <span class="timestamp">${new Date().toLocaleString()}</span>
-                    <div class="message-options">
-                        <span class="three-dots">...</span>
-                    </div>
-                `;
             }
         });
 
